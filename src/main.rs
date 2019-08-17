@@ -53,6 +53,7 @@ enum ActorType {
     Player,
     Rock,
     Shot,
+    Planet,
 }
 
 #[derive(Debug)]
@@ -74,10 +75,12 @@ struct Actor {
 const PLAYER_LIFE: f32 = 1.0;
 const SHOT_LIFE: f32 = 4.0;
 const ROCK_LIFE: f32 = 1.0;
+const PLANET_LIFE: f32 = 5.0;
 
 const PLAYER_BBOX: f32 = 12.0;
 const ROCK_BBOX: f32 = 12.0;
 const SHOT_BBOX: f32 = 6.0;
+const PLANET_BBOX: f32 = 1.0; //need to adjust this
 
 const MAX_ROCK_VEL: f32 = 5.0;
 
@@ -118,6 +121,18 @@ fn create_shot() -> Actor {
         ang_vel: SHOT_ANG_VEL,
         bbox_size: SHOT_BBOX,
         life: SHOT_LIFE,
+    }
+}
+
+fn create_planet() -> Actor {
+    Actor {
+        tag: ActorType::Planet,
+        pos: Point2::new(222.0, -172.0),
+        facing: 0.,
+        velocity: na::zero(),
+        ang_vel: 0.,
+        bbox_size: PLANET_BBOX,
+        life: PLANET_LIFE,
     }
 }
 
@@ -233,6 +248,7 @@ struct Assets {
     player_image: graphics::Image,
     shot_image: graphics::Image,
     rock_image: graphics::Image,
+    planet_green_image: graphics::Image,
     font: graphics::Font,
     shot_sound: audio::Source,
     hit_sound: audio::Source,
@@ -243,6 +259,7 @@ impl Assets {
         let player_image = graphics::Image::new(ctx, "/car.png")?;
         let shot_image = graphics::Image::new(ctx, "/pepperoni.png")?;
         let rock_image = graphics::Image::new(ctx, "/star.png")?;
+        let planet_green_image = graphics::Image::new(ctx, "/planet_green.png")?;
         let font = graphics::Font::new(ctx, "/DejaVuSerif.ttf")?;
 
         let shot_sound = audio::Source::new(ctx, "/pew.ogg")?;
@@ -252,6 +269,7 @@ impl Assets {
             player_image,
             shot_image,
             rock_image,
+            planet_green_image,
             font,
             shot_sound,
             hit_sound,
@@ -263,6 +281,7 @@ impl Assets {
             ActorType::Player => &mut self.player_image,
             ActorType::Rock => &mut self.rock_image,
             ActorType::Shot => &mut self.shot_image,
+            ActorType::Planet => &mut self.planet_green_image,
         }
     }
 }
@@ -304,6 +323,7 @@ struct MainState {
     player: Actor,
     shots: Vec<Actor>,
     rocks: Vec<Actor>,
+    planet_green: Actor,
     level: i32,
     score: i32,
     assets: Assets,
@@ -322,12 +342,14 @@ impl MainState {
         let assets = Assets::new(ctx)?;
         let player = create_player();
         let rocks = create_rocks(100, player.pos, 100.0, 250.0);
+        let planet_green = create_planet();
 
         let (width, height) = graphics::drawable_size(ctx);
         let s = MainState {
             player,
             shots: Vec::new(),
             rocks,
+            planet_green,
             level: 0,
             score: 0,
             assets,
@@ -501,6 +523,9 @@ impl EventHandler for MainState {
             for r in &self.rocks {
                 draw_actor(assets, ctx, r, coords)?;
             }
+            
+            let pg = &self.planet_green;
+            draw_actor(assets, ctx, pg, coords)?;
         }
 
         // And draw the GUI elements in the right places.
