@@ -75,12 +75,12 @@ struct Actor {
 const PLAYER_LIFE: f32 = 1.0;
 const SHOT_LIFE: f32 = 4.0;
 const ROCK_LIFE: f32 = 1.0;
-const PLANET_LIFE: f32 = 5.0;
+const PLANET_LIFE: f32 = 1.0;
 
 const PLAYER_BBOX: f32 = 12.0;
 const ROCK_BBOX: f32 = 12.0;
 const SHOT_BBOX: f32 = 6.0;
-const PLANET_BBOX: f32 = 1.0; //need to adjust this
+const PLANET_BBOX: f32 = 40.0; // probably need to adjust this
 
 const MAX_ROCK_VEL: f32 = 5.0;
 
@@ -153,6 +153,19 @@ fn create_rocks(num: i32, exclusion: Point2, min_radius: f32, max_radius: f32) -
         rock
     };
     (0..num).map(new_rock).collect()
+}
+
+fn create_planets(num: i32, exclusion: Point2, min_radius: f32, max_radius: f32) -> Vec<Actor> {
+    assert!(max_radius > min_radius);
+    let new_planet = |_| {
+        let mut planet = create_planet();
+        let r_angle = rand::random::<f32>() * 2.0 * std::f32::consts::PI;
+        let r_distance = rand::random::<f32>() * (max_radius - min_radius) + min_radius;
+        planet.pos = exclusion + vec_from_angle(r_angle) * r_distance;
+        planet.velocity = random_vec(MAX_ROCK_VEL);
+        planet
+    };
+    (0..num).map(new_planet).collect()
 }
 
 /// *********************************************************************
@@ -323,7 +336,7 @@ struct MainState {
     player: Actor,
     shots: Vec<Actor>,
     rocks: Vec<Actor>,
-    planet_green: Actor,
+    planet_green: Vec<Actor>,
     level: i32,
     score: i32,
     assets: Assets,
@@ -342,7 +355,7 @@ impl MainState {
         let assets = Assets::new(ctx)?;
         let player = create_player();
         let rocks = create_rocks(100, player.pos, 100.0, 250.0);
-        let planet_green = create_planet();
+        let planet_green = create_planets(1, player.pos, 100.0, 250.0);
 
         let (width, height) = graphics::drawable_size(ctx);
         let s = MainState {
@@ -381,6 +394,7 @@ impl MainState {
     fn clear_dead_stuff(&mut self) {
         self.shots.retain(|s| s.life > 0.0);
         self.rocks.retain(|r| r.life > 0.0);
+        self.planet_green.retain(|p| p.life > 0.0);
     }
 
     fn handle_collisions(&mut self) {
@@ -399,6 +413,22 @@ impl MainState {
                     let _ = self.assets.hit_sound.play();
                 }
             }
+        }
+        for planet_green in &mut self.planet_green {
+        		let pgdistance = planet_green.pos - self.player.pos;
+        		if pgdistance.norm() < (self.player.bbox_size + planet_green.bbox_size) {
+        			self.player.life = 0.0;
+        		}
+        		for shot in &mut self.shots {
+        			let distance = shot.pos - planet_green.pos;
+        			if distance.norm() < (shot.bbox_size + planet_green.bbox_size) {
+        				shot.life = 0.0;
+        				planet_green.life = 0.0;
+        				self.score += 1;
+        				
+        				let _ = self.assets.hit_sound.play();
+        			}
+        		}
         }
     }
 
@@ -480,6 +510,12 @@ impl EventHandler for MainState {
                 update_actor_position(act, seconds);
                 wrap_actor_position(act, self.screen_width as f32, self.screen_height as f32);
             }
+            
+            // Adding planet_green
+            for act in &mut self.planet_green {
+            		update_actor_position(act, seconds);
+            		wrap_actor_position(act, self.screen_width as f32, self.screen_height as f32);
+            }
 
             // Handle the results of things moving:
             // collision detection, object death, and if
@@ -524,9 +560,10 @@ impl EventHandler for MainState {
                 draw_actor(assets, ctx, r, coords)?;
             }
             
-            let pg = &self.planet_green;
-            draw_actor(assets, ctx, pg, coords)?;
-        }
+            for pg in &self.planet_green {
+            		draw_actor(assets, ctx, pg, coords)?;
+        		}
+        	}
 
         // And draw the GUI elements in the right places.
         let level_dest = Point2::new(10.0, 10.0);
